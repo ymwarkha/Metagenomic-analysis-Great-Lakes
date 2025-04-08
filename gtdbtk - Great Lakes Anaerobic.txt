@@ -1,0 +1,53 @@
+# Set working directory
+setwd("~/data/Yogita/GREAT LAKES/")
+
+# Read in the data
+genes <- read.csv(file = "~/data/Yogita/GREAT LAKES/New gtdb-tk Anaerobics Great Lakes.csv", sep = ',')
+
+# Define the custom color palette
+Color_Palette <- c(
+  "#ff69b4", "#004949", "#009292", "wheat", "#ffb6db", "#4682b4", "blue", 
+  "lightblue", "#DAA520", "cyan", "orange", "darkgray", "#924900", "#db6d00", 
+  "#FFFF00", "#B22222", "#32CD32", "#FF7F50", "#FFD700", "#ff4500", "#1E90FF", 
+  "#daa520", "#8b4513", "#d2691e"
+)
+
+
+# Filter the data for aerobic metabolism only
+genes_aerobic <- genes %>% 
+  filter(Metabolism == "Anaerobic_hydrocarbon")
+
+# Order the Metagenome levels explicitly (adjust based on your dataset)
+genes_aerobic$Metagenome <- factor(genes_aerobic$Metagenome, 
+                                   levels = c("MI_141", "Strait_1E", "Strait_3F", "Superior_1A", "Superior_4B"))
+
+# Group the data by Metagenome and Taxonomy (Phylum) and sum the number of genes for each group
+genes_grouped <- genes_aerobic %>%
+  group_by(Metagenome, Taxonomy) %>%
+  summarise(Total_Genes = sum(Number_Genes, na.rm = TRUE)) %>%
+  ungroup()
+
+# Create a stacked bar plot with Metagenome on x-axis and Total_Genes on y-axis, filled by Taxonomy
+ggplot(genes_grouped, aes(x = Metagenome, y = Total_Genes, fill = Taxonomy)) +
+  geom_bar(stat = "identity", position = "stack") +
+  theme_minimal() +
+  labs(title = "", 
+       x = "Great Lakes Sediment Samples", 
+       y = "Total Number of Anaerobic Genes", 
+       fill = "Taxonomy") +
+  scale_fill_manual(values = Color_Palette) +  # Apply the custom color palette
+  theme(
+    text = element_text(family = "Myriad Pro"),
+    #plot.title = element_text(size = 15, face = "bold"),  # Increase title size
+    axis.text.x = element_text(angle = 20, hjust = 1,size=18, color = "black"),
+    axis.text.y = element_text(size = 18,color = "black"), # Adjust font size if necessary
+    axis.title.x = element_text(size = 18, face = "plain", margin = margin(t = 15)),  # Increase x-axis title size
+    axis.title.y = element_text(size = 18, face = "plain"),  # Increase y-axis title size
+    legend.title = element_text(size = 22, face="bold"),  # Increase legend title size
+    legend.text = element_text(size = 20),  # Increase legend text size
+    panel.grid = element_blank()  # Removes grid lines for a cleaner look
+  )
+
+#width=1029&height=570&scale=1
+#764&height=479&scale=1
+#width=1078&height=574&scale=1

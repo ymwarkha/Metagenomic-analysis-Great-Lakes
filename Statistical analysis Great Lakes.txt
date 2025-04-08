@@ -1,0 +1,274 @@
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+library(phyloseq)
+library(tidyr)
+library(ape)
+library(vegan)
+
+# Set working directory
+setwd("~/data/Yogita/GREAT LAKES/")
+
+# Load Genus data for alpha diversity and statistical analysis
+genes <- read.csv(file = "~/data/Yogita/GREAT LAKES/Great Lakes Genus Taxonomy.csv", sep = ',')
+
+# View the structure of the data
+head(genes)
+
+# Filter and group low abundance genera, then calculate abundance
+all <- genes %>%
+  select(Sample, Genus, fraction_total_reads) %>%
+  filter(fraction_total_reads != 0) %>%
+  mutate(Genus = ifelse(fraction_total_reads < 0.01, "< 0.01 %", Genus)) %>%
+  group_by(Sample, Genus) %>%
+  summarise(Abundance = sum(fraction_total_reads)) %>%
+  ungroup()
+
+# Define colors for the genera plot
+Genus_colors <- c(
+  "grey22", "darkcyan", "orchid1", "green", "orange", "blue", "tomato2", "olivedrab", "grey47",
+  "cyan", "coral3", "darkgreen", "magenta", "palegoldenrod", "dodgerblue", "firebrick", "yellow", "purple4",
+  "lightblue", "grey77", "mediumpurple1", "tan4", "red", "darkblue", "yellowgreen","violet" , "purple"
+)
+
+# Plot the Genus level taxonomic composition for Lake Superior samples
+ggplot(all) +
+  geom_col(mapping = aes(x = Sample, y = Abundance, fill = Genus), color = "black", position = "stack", show.legend = TRUE) +
+  ylab("Gene counts") +
+  xlab(NULL) +
+  scale_fill_manual(values = Genus_colors) +
+  theme_linedraw() +
+  theme(
+    axis.text.y = element_text(size = 15, color = "black"),
+    axis.title.y = element_text(size = 15, color = "black"),
+    axis.text.x = element_text(size = 13, angle = 0, vjust = 1, hjust = 0.5, color = "black"),
+    legend.text = element_text(size = 15),
+    legend.position = "bottom",
+    legend.spacing.x = unit(0.1, 'mm'),
+    legend.spacing.y = unit(0.05, 'mm'),
+    plot.margin = grid::unit(c(0.1, 0.1, 0.1, 0.1), "mm"),
+    strip.text = element_text(size = 15, face = "bold", angle = 0),
+    legend.title = element_text(face = "bold", size = 15)
+  ) +
+  guides(fill = guide_legend(ncol = 3, byrow = TRUE)) +
+  scale_x_discrete(labels = c('MI_141', 'Strait_1E', 'Strait_3F', 'Superior_1A', 'Superior_4B'))  # Replace with actual sample labels
+
+#Preparing data for phyloseq analysis
+# Here, `Sample`, `Genus`, `Abundance`, etc. must be available in `lake data`
+
+#Load and Inspect Your Data
+abundance_data <- read.csv("Great Lakes Genus Taxonomy.csv")
+head(abundance_data)
+head(all)
+
+# Assuming 'all' already has the sample identifiers in the "Sample" column
+
+# Step: Create sdata table with unique sample identifiers
+sdata <- all %>%
+  select(Sample) %>%  # Select only the Sample column
+  unique() %>%        # Keep unique samples
+  mutate(UniqueID = Sample) %>%  # Create a UniqueID column (can be useful later)
+  column_to_rownames(var = "UniqueID")  # Set UniqueID as row names
+
+# Display the sdata table
+head(sdata)
+
+# Create a unique identifier for each sample in `all`
+all2 <- all %>%
+  mutate(UniqueID = Sample) %>%
+  ungroup()
+
+# Generate the sequence table
+sequence_table <- all2 %>%
+  mutate(Percent_of_Community = as.integer(Abundance * 10000)) %>% # Adjusting abundance to integer
+  select(UniqueID, Genus, Percent_of_Community) %>%
+  filter(Percent_of_Community > 0) %>%
+  group_by(UniqueID) %>%
+  pivot_wider(names_from = Genus, values_from = Percent_of_Community, values_fill = 0) %>%
+  column_to_rownames("UniqueID")
+
+# Preview the sequence_table
+head(sequence_table)
+
+# Create a taxa table with genus names from the sequence table
+taxa_table <- data.frame(Genus = colnames(sequence_table))
+rownames(taxa_table) <- colnames(sequence_table)
+taxtab <- tax_table(as.matrix(taxa_table))
+
+# Preview the taxa table
+head(taxtab)
+
+# Convert sdata to sample_data
+samdata <- sample_data(sdata)
+
+# Convert sequence_table to otu_table
+seqtab <- otu_table(sequence_table, taxa_are_rows = FALSE)
+
+# Construct the phyloseq object
+physeq <- phyloseq(seqtab, taxtab, samdata)
+
+# Check the phyloseq object to ensure everything is correctly loaded
+physeq
+
+# Calculate alpha diversity (Observed and Shannon indices)
+
+# Calculate alpha diversity metrics
+alpha_div <- estimate_richness(physeq, measures = c("Observed", "Shannon"))
+
+# Convert row names to a column for easy plotting
+alpha_div <- rownames_to_column(alpha_div, var = "Sample")
+
+# Display the first few rows of the alpha diversity table to confirm
+head(alpha_div)
+
+library(ggplot2)
+
+# Plot Observed Richness
+
+# Enhanced Observed Richness plot with a border around the whole plot
+library(ggplot2)
+
+ggplot(alpha_div, aes(x = Sample, y = Observed)) +
+  geom_point(aes(color = Sample, shape = Sample), size = 5) +
+  theme_minimal() +
+  labs(y = "Observed Richness") +
+  scale_color_manual(values = c("MI_141" = "firebrick", "Strait_1E" = "forestgreen", 
+                                "Strait_3F" = "goldenrod", "Superior_1A" = "royalblue", 
+                                "Superior_4B" = "purple")) +
+  scale_shape_manual(values = c("MI_141" = 17, "Strait_1E" = 17, 
+                                "Strait_3F" = 17, "Superior_1A" = 17, 
+                                "Superior_4B" = 17)) +  # All triangles
+  theme(
+    text = element_text(family = "Myriad Pro"),
+    axis.text.x = element_text(size = 18, angle = 45, hjust = 1, color = "black"),
+    axis.text.y = element_text(size = 18, color = "black"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 18, face = "plain"),
+    legend.position = "none",
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
+  )
+
+
+#width=742&height=641&scale=1
+#width=1192&height=654&scale=1
+#646&height=485&scale=1
+# Enhanced Shannon Diversity plot with a border around the whole plot
+library(ggplot2)
+
+ggplot(alpha_div, aes(x = Sample, y = Shannon)) +
+  geom_point(aes(color = Sample, shape = Sample), size = 5) +
+  theme_minimal() +
+  labs(y = "Shannon Diversity") +
+  scale_color_manual(values = c("MI_141" = "firebrick", "Strait_1E" = "forestgreen", 
+                                "Strait_3F" = "goldenrod", "Superior_1A" = "royalblue", 
+                                "Superior_4B" = "purple"),
+                     name = "Sample") +
+  scale_shape_manual(values = c("MI_141" = 17, "Strait_1E" = 17, 
+                                "Strait_3F" = 17, "Superior_1A" = 17, 
+                                "Superior_4B" = 17)) +  # All triangles
+  theme(
+    text = element_text(family = "Myriad Pro"),
+    axis.text.x = element_text(size = 18, angle = 45, hjust = 1, color = "black"),
+    axis.text.y = element_text(size = 18, color = "black"),
+    axis.title.x = element_blank(),
+    axis.title.y = element_text(size = 18, face = "plain"),
+    legend.position = "right",
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 22, face = "bold"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
+  )
+
+
+#width=742&height=641&scale=1
+#width=1191&height=654&scale=1
+#706&height=416&scale
+#width=897&height=641&scale=1
+
+
+# Perform ordination (PCoA) using Bray-Curtis distance
+ordination <- ordinate(physeq, method = "PCoA", distance = "bray")
+
+
+# Convert the vectors data to a data frame for easier plotting
+ordination_df <- as.data.frame(ordination$vectors)
+ordination_df$Sample <- rownames(ordination_df)  # Add sample names as a column
+
+# Extract percentages from the PCoA output
+explained_var <- round(ordination$values$Relative_eig[1:2] * 100, 1)  # First two axes
+
+
+# Add the percentages to the plot labels
+ggplot_ordination <- ggplot(ordination_df, aes(x = Axis.1, y = Axis.2, color = Sample)) +
+  geom_point(size = 5) +
+  theme_minimal() +
+  labs(
+    x = paste0("PCoA1 (", explained_var[1], "%)"), 
+    y = paste0("PCoA2 (", explained_var[2], "%)")
+  ) +
+  scale_color_manual(values = c("MI_141" = "firebrick", "Strait_1E" = "forestgreen", 
+                                "Strait_3F" = "goldenrod", "Superior_1A" = "royalblue", 
+                                "Superior_4B" = "purple")) +
+  theme(
+    text = element_text(family = "Myriad Pro"),
+    axis.text.x = element_text(size = 18, color = "black"),
+    axis.text.y = element_text(size = 18, color = "black"),
+    axis.title.x = element_text(size = 18, face = "plain"),
+    axis.title.y = element_text(size = 18, face = "plain"),
+    legend.position = "right",
+    legend.text = element_text(size = 20),
+    legend.title = element_text(size = 22, face = "bold"),
+    plot.title = element_text(size = 20, face = "bold"),
+    panel.grid = element_blank(),
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
+  )
+
+
+#width=971&height=641&scale=1
+
+
+# Display the plot
+print(ggplot_ordination)
+#650&height=489&scale=1
+
+# Load vegan package
+library(vegan)
+
+# Calculate the Bray-Curtis distance matrix
+bray_dist <- phyloseq::distance(physeq, method = "bray")
+
+# Extract the sample metadata as a data frame
+sample_data_df <- data.frame(sample_data(physeq))
+
+# Add a Location column to categorize samples
+sample_data_df$Location <- ifelse(
+  sample_data_df$Sample %in% c("Superior_1A", "Superior_4B"), "Superior Lakes", "Straits"
+)
+
+
+# Run PERMANOVA
+permanova_result <- adonis2(bray_dist ~ Sample, data = sample_data_df)
+
+# Display the PERMANOVA result
+print(permanova_result)
+
+#Part 2
+
+# Add Location column
+sample_data_df$Location <- ifelse(
+  sample_data_df$Sample %in% c("Superior_1A", "Superior_4B"), "Superior", "Straits"
+)
+
+# Verify Bray-Curtis matrix
+print(as.matrix(bray_dist))
+
+# Run PERMANOVA using Location
+permanova_result <- adonis2(bray_dist ~ Location, data = sample_data_df)
+print(permanova_result)
+
+# Run dispersion test (if PERMANOVA is inconclusive)
+dispersion <- betadisper(bray_dist, sample_data_df$Location)
+permutest(dispersion)
+plot(dispersion)
+

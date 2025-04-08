@@ -1,0 +1,163 @@
+
+
+#1 Mi141
+#convert gff file to gtf
+grep -v "#" newnonbinned.gff  | grep "ID=" | cut -f1 -d ';' | sed 's/ID=//g' | cut -f1,4,5,7,9 |  awk -v OFS='\t' '{print $1,"PROKKA","CDS",$2,$3,".",$4,".","gene_id " $5}' > annotation2.gtf
+
+samtools view -b MI141_MG_map.sam | samtools sort -o out_new.bam
+samtools index out_new.bam
+samtools rmdup out_new.bam out_dedup_new.bam
+samtools idxstats out_dedup_new.bam > coverage_new.txt
+
+
+#Strait1E
+#convert gff file to gtf
+grep -v "#" newnonbinned.gff  | grep "ID=" | cut -f1 -d ';' | sed 's/ID=//g' | cut -f1,4,5,7,9 |  awk -v OFS='\t' '{print $1,"PROKKA","CDS",$2,$3,".",$4,".","gene_id " $5}' > annotation.gtf
+
+#create new bam file 
+
+samtools view -b Strait1E_MG_map.sam | samtools sort -o out_new.bam
+samtools index out_new.bam
+samtools rmdup out_new.bam out_dedup_new.bam
+samtools idxstats out_dedup_new.bam > coverage_new.txt
+
+
+#Strait3F
+#convert gff file to gtf
+
+grep -v "#" newnonbinned.gff  | grep "ID=" | cut -f1 -d ';' | sed 's/ID=//g' | cut -f1,4,5,7,9 |  awk -v OFS='\t' '{print $1,"PROKKA","CDS",$2,$3,".",$4,".","gene_id " $5}' > annotation.gtf
+
+
+#create new bam file 
+
+samtools view -b Strait3F_MG_map.sam | samtools sort -o out_new.bam
+samtools index out_new.bam
+samtools rmdup out_new.bam out_dedup_new.bam
+samtools idxstats out_dedup_new.bam > coverage_new.txt
+
+
+#Superior1A
+#convert gff file to gtf
+
+grep -v "#" newnonbinned.gff  | grep "ID=" | cut -f1 -d ';' | sed 's/ID=//g' | cut -f1,4,5,7,9 |  awk -v OFS='\t' '{print $1,"PROKKA","CDS",$2,$3,".",$4,".","gene_id " $5}' > annotation.gtf
+
+
+#create new bam file 
+
+samtools view -b Superior1A_MG_map.sam | samtools sort -o out_new.bam
+samtools index out_new.bam
+samtools rmdup out_new.bam out_dedup_new.bam
+samtools idxstats out_dedup_new.bam > coverage_new.txt
+
+
+#Superior4B
+#convert gff file to gtf
+
+grep -v "#" newnonbinned.gff  | grep "ID=" | cut -f1 -d ';' | sed 's/ID=//g' | cut -f1,4,5,7,9 |  awk -v OFS='\t' '{print $1,"PROKKA","CDS",$2,$3,".",$4,".","gene_id " $5}' > annotation.gtf
+
+
+#create new bam file 
+
+samtools view -b Superior4B_MG_map.sam | samtools sort -o out_new.bam
+samtools index out_new.bam
+samtools rmdup out_new.bam out_dedup_new.bam
+samtools idxstats out_dedup_new.bam > coverage_new.txt
+
+#run htseq
+
+This one worked
+htseq-count -t CDS -i name -s no -i gene_id out_dedup_new.bam annotation.gtf > Superior4B_counts_new.txt
+htseq-count -t CDS -i name -s no -i gene_id out_dedup_new.bam annotation.gtf > Strait1E_counts_new.txt
+htseq-count -t CDS -i name -s no -i gene_id out_dedup_new.bam annotation.gtf > Superior1A_counts_new.txt
+htseq-count -t CDS -i name -s no -i gene_id out_dedup_new.bam annotation2.gtf > MI_141_NEW_counts_new.txt
+
+
+
+grep -v "#" nonbinned.gff  | grep "ID=" | cut -f1 -d ';' | sed 's/ID=//g' | cut -f1,4,5,7,9 |  awk -v OFS='\t' '{print $1,"PROKKA","CDS",$2,$3,".",$4,".","gene_id " $5}' > annotation.gtf
+
+
+htseq-count -t CDS -i name -s no -i gene_id out_dedup.bam annotation.gtf > Cas_1_0-4_counts_new.txt
+
+
+
+
+
+
+
+
+#Once the data generated htseq file and prokka tsv file - work on these two on R
+library(tidyverse)
+setwd("~/data/Yogita/GREAT LAKES/")
+
+MI_141_genes<-read_tsv("~/data/Yogita/GREAT LAKES/MI_141 htseeq/newnonbinned.tsv")
+head(MI_141_genes)
+colSums(is.na(MI_141_genes))
+
+
+MI_141_counts<-read_tsv("~/data/Yogita/GREAT LAKES/MI_141 htseeq/MI_141_NEW_counts_new.txt")
+head(MI_141_counts)
+
+# This command will join them together to give you counts
+MI_141_gene_count<-left_join(MI_141_genes,MI_141_counts)
+head(MI_141_gene_count)
+
+
+#This command will join them together to give you counts and then some commonly used count measures (RPKM and TPM)
+
+#Before calculating RPKM & TPM, ensure count and length_bp are numeric:
+
+summary(MI_141_gene_count$count)
+summary(MI_141_gene_count$length_bp)
+
+#Fix the Missing (NA) Values in count
+MI_141_gene_count <- MI_141_gene_count %>%
+  mutate(count = replace_na(count, 0))
+
+#Normalize Gene Expression (RPKM & TPM)
+MI_141_gene_count_Norm <- left_join(MI_141_genes, MI_141_counts, by = "locus_tag") %>%
+  mutate(RPKM = count / ((length_bp / 1000) * (sum(count, na.rm = T) / 1e6)),
+         RPK = count / (length_bp / 1000),
+         TPM = (RPK / (sum(RPK, na.rm = T) / 1e6)))
+
+#Verify the Normalized Data
+summary(MI_141_gene_count_Norm$RPKM)
+summary(MI_141_gene_count_Norm$TPM)
+
+#Replace NA Values in count, RPKM, and TPM
+
+MI_141_gene_count_Norm <- MI_141_gene_count_Norm %>%
+  mutate(count = replace_na(count, 0),  # Genes with missing counts assumed as 0 expression
+         RPKM = replace_na(RPKM, 0),    # Missing RPKM replaced with 0
+         TPM = replace_na(TPM, 0))      # Missing TPM replaced with 0
+
+
+#Verify That NA Values Are Fixed
+summary(MI_141_gene_count_Norm$RPKM)
+summary(MI_141_gene_count_Norm$TPM)
+#check if still has na value
+colSums(is.na(MI_141_gene_count_Norm))
+
+MI_141_gene_count_Norm <- MI_141_gene_count_Norm %>%
+  mutate(RPK = replace_na(RPK, 0))
+
+colSums(is.na(MI_141_gene_count_Norm))
+
+
+# Read the list of hydrocarbon genes
+HC_names <- read_csv("~/data/Yogita/GREAT LAKES/MI_141 htseeq/List of Genes.csv")
+
+# Rename "Names" column to match "locus_tag" before merging
+colnames(HC_names)[1] <- "product"
+
+# Merge hydrocarbon gene list with HTSeq-count data
+test_HC_gene_count <- left_join(HC_names, MI_141_gene_count_Norm, by = "product")
+
+# Summarize by Oxygen & Hydrocarbon Type
+test_HC_gene_count %>%
+  group_by(Oxygen, HC_Type) %>%
+  summarize(sum_RPKM = sum(RPKM, na.rm = TRUE),
+            sum_TPM = sum(TPM, na.rm = TRUE))
+
+
+
+

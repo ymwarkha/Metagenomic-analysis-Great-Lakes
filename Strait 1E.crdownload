@@ -1,0 +1,82 @@
+library(tidyverse)
+setwd("~/data/Yogita/GREAT LAKES/")
+
+Strait1E_genes<-read_tsv("~/data/Yogita/GREAT LAKES/Strait_1E/newnonbinned.tsv")
+head(Strait1E_genes)
+
+
+Strait1E_counts<-read_tsv("~/data/Yogita/GREAT LAKES/Strait_1E/Strait1E_counts_new.txt")
+head(Strait1E_counts)
+
+# This command will join them together to give you counts
+Strait1E_gene_count<-left_join(Strait1E_genes,Strait1E_counts)
+head(Strait1E_gene_count)
+
+
+#This command will join them together to give you counts and then some commonly used count measures (RPKM and TPM)
+
+#Before calculating RPKM & TPM, ensure count and length_bp are numeric:
+
+summary(Strait1E_gene_count$count)
+summary(Strait1E_gene_count$length_bp)
+
+#Fix the Missing (NA) Values in count
+Strait1E_gene_count <- Strait1E_gene_count %>%
+  mutate(count = replace_na(count, 0))
+
+#Normalize Gene Expression (RPKM & TPM)
+Strait1E_gene_count_Norm <- left_join(Strait1E_genes, Strait1E_counts, by = "locus_tag") %>%
+  mutate(RPKM = count / ((length_bp / 1000) * (sum(count, na.rm = T) / 1e6)),
+         RPK = count / (length_bp / 1000),
+         TPM = (RPK / (sum(RPK, na.rm = T) / 1e6)))
+
+#Verify the Normalized Data
+summary(Strait1E_gene_count_Norm$RPKM)
+summary(Strait1E_gene_count_Norm$TPM)
+
+#Replace NA Values in count, RPKM, and TPM
+
+Strait1E_gene_count_Norm <- Strait1E_gene_count_Norm %>%
+  mutate(count = replace_na(count, 0),  # Genes with missing counts assumed as 0 expression
+         RPKM = replace_na(RPKM, 0),    # Missing RPKM replaced with 0
+         TPM = replace_na(TPM, 0))      # Missing TPM replaced with 0
+
+
+#Verify That NA Values Are Fixed
+summary(Strait1E_gene_count_Norm$RPKM)
+summary(Strait1E_gene_count_Norm$TPM)
+#check if still has na value
+colSums(is.na(Strait1E_gene_count_Norm))
+
+Strait1E_gene_count_Norm <- Strait1E_gene_count_Norm %>%
+  mutate(RPK = replace_na(RPK, 0))
+
+colSums(is.na(Strait1E_gene_count_Norm))
+
+
+# Read the list of hydrocarbon genes
+HC_names <- read_csv("~/data/Yogita/GREAT LAKES/Strait_1E/List of Genes.csv")
+
+# Rename "Names" column to match "locus_tag" before merging
+colnames(HC_names)[1] <- "product"
+
+# Merge hydrocarbon gene list with HTSeq-count data
+test_HC_gene_count <- left_join(HC_names, Strait1E_gene_count_Norm, by = "product")
+
+# Summarize by Oxygen & Hydrocarbon Type
+test_HC_gene_count %>%
+  group_by(Oxygen, HC_Type) %>%
+  summarize(sum_RPKM = sum(RPKM, na.rm = TRUE),
+            sum_TPM = sum(TPM, na.rm = TRUE))
+
+
+
+
+
+
+
+
+
+
+
+

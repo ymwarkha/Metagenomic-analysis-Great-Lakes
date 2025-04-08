@@ -1,0 +1,165 @@
+
+# Load required libraries
+library(dplyr)
+library(ggplot2)
+library(vegan)
+library(tidyr)
+library(ape)
+# Load hydrocarbon gene data and set Metagenome as row names
+genes_hydrocarbon <- read.csv(file = "~/data/Yogita/GREAT LAKES/Hydrocarbon_gene_diversity.csv", row.names = 1)
+
+# Convert all columns to numeric (fix any text formatting issues)
+genes_hydrocarbon[] <- lapply(genes_hydrocarbon, function(x) as.numeric(as.character(x)))
+
+# Convert to matrix
+gene_matrix <- as.matrix(genes_hydrocarbon)
+
+# Check structure
+str(gene_matrix)  # Should show numeric values only
+
+
+
+
+# Compute Shannon Diversity Index
+shannon_diversity <- diversity(gene_matrix, index = "shannon")
+
+# Compute Observed Richness (total number of hydrocarbon genes per sample)
+observed_richness <- rowSums(gene_matrix)
+
+# Create a dataframe with diversity metrics
+diversity_results <- data.frame(
+  Metagenome = rownames(gene_matrix),
+  Shannon_Index = shannon_diversity,
+  Observed_Richness = observed_richness
+)
+
+# Save results as CSV
+write.csv(diversity_results, "Diversity_Metrics_Hydrocarbon_Genes.csv", row.names = FALSE)
+
+# View the results
+print(diversity_results)
+
+
+#shannon diversity
+ggplot(diversity_results, aes(x = Metagenome, y = Shannon_Index, color = Metagenome, shape = Metagenome)) +
+  geom_point(size = 5) +  
+  theme_minimal() +
+  labs(x = NULL,  # removes X-axis title
+    y = "Shannon Diversity") +
+  scale_color_manual(values = c("MI_141" = "firebrick", "Strait_1E" = "forestgreen", 
+                                "Strait_3F" = "goldenrod", "Superior_1A" = "royalblue", 
+                                "Superior_4B" = "purple")) +
+  scale_shape_manual(values = c(17, 15, 16, 18, 19)) +  
+  guides(color = guide_legend(title = "Sample"),  # changes legend title to "Sample"
+         shape = guide_legend(title = "Sample")) +  
+  theme(
+    axis.text.x = element_text(size = 18, angle = 20, hjust = 1, color = "black"),
+    axis.text.y = element_text(size = 18,color = "black"),
+    axis.title.x = element_text(size = 18, face = "plain", margin = margin(t = 15)),   
+    axis.title.y = element_text(size = 18, face = "plain"),# Increase y-axis title size,
+    legend.title = element_text(size = 22, face="bold"),  # Increase legend title size
+    legend.text = element_text(size = 20),  # Increase legend text size
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)  
+  )
+
+
+#width=955&height=570&scale=1
+
+#Observed richness
+ggplot(diversity_results, aes(x = Metagenome, y = Observed_Richness, color = Metagenome, shape = Metagenome)) +
+  geom_point(size = 5) +  
+  theme_minimal() +
+  labs(x = NULL,  # removes X-axis title
+       y = "Observed Richness") +  # changes Y-axis label
+  scale_color_manual(values = c("MI_141" = "firebrick", "Strait_1E" = "forestgreen", 
+                                "Strait_3F" = "goldenrod", "Superior_1A" = "royalblue", 
+                                "Superior_4B" = "purple")) +
+  scale_shape_manual(values = c(17, 15, 16, 18, 19)) +  
+  guides(color = guide_legend(title = "Sample"),  # legend title changed to "Sample"
+         shape = guide_legend(title = "Sample")) +  
+  theme(
+    axis.text.x = element_text(size = 18, angle = 20, hjust = 1, color = "black"),
+    axis.text.y = element_text(size = 18, color = "black"),
+    axis.title.y = element_text(size = 18, face = "plain"),  # increases Y-axis title size
+    legend.title = element_text(size = 22, face = "bold"),  
+    legend.text = element_text(size = 20),  
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)  
+  )
+
+
+
+#width=955&height=570&scale=1
+
+# Kruskal-Wallis Test for Shannon Diversity
+kruskal_shannon <- kruskal.test(Shannon_Index ~ Metagenome, data = diversity_results)
+print(kruskal_shannon)
+
+# Kruskal-Wallis Test for Observed Richness
+kruskal_richness <- kruskal.test(Observed_Richness ~ Metagenome, data = diversity_results)
+print(kruskal_richness)
+
+
+
+
+# Load necessary libraries
+library(vegan)   # For Bray-Curtis distance and PERMANOVA
+library(ggplot2) # For visualization
+
+# Convert diversity data into matrix format
+gene_matrix <- as.matrix(diversity_results[, c("Shannon_Index", "Observed_Richness")])
+rownames(gene_matrix) <- diversity_results$Metagenome  # Set row names to metagenome names
+
+# Compute Bray-Curtis distance
+bray_dist <- vegdist(gene_matrix, method = "bray")
+
+
+# Perform Principal Coordinate Analysis (PCoA)
+pcoa_result <- cmdscale(bray_dist, eig = TRUE, k = 2)  # k=2 extracts the first 2 principal coordinates
+
+# Convert PCoA results into a data frame for visualization
+ordination_df <- data.frame(Sample = rownames(gene_matrix),
+                            Axis.1 = pcoa_result$points[,1],
+                            Axis.2 = pcoa_result$points[,2])
+
+# Define colors and shapes for samples
+sample_colors <- c("MI_141" = "firebrick", "Strait_1E" = "forestgreen", 
+                   "Strait_3F" = "goldenrod", "Superior_1A" = "royalblue", 
+                   "Superior_4B" = "purple")
+
+sample_shapes <- c("MI_141" = 17, "Strait_1E" = 15, "Strait_3F" = 16, "Superior_1A" = 18, "Superior_4B" = 19)
+
+# Plot PCoA with improved aesthetics
+ggplot(ordination_df, aes(x = Axis.1, y = Axis.2, color = Sample, shape = Sample)) +
+  geom_point(size = 5) +  
+  theme_minimal() +
+  labs(x = paste0("PCoA1 (", explained_var[1], "%)"), 
+       y = paste0("PCoA2 (", explained_var[2], "%)"),
+       title = "PCoA of Hydrocarbon-Degrading Genes (Bray-Curtis)") +
+  scale_color_manual(values = sample_colors) +
+  scale_shape_manual(values = sample_shapes) +
+  guides(color = guide_legend(title = "Sample"),  
+         shape = guide_legend(title = "Sample")) +  
+  theme(
+    axis.text.x = element_text(size = 18, angle = 20, hjust = 1, color = "black"),
+    axis.text.y = element_text(size = 18, color = "black"),
+    axis.title.x = element_text(size = 18, face = "plain", margin = margin(t = 15)),   
+    axis.title.y = element_text(size = 18, face = "plain"),  
+    legend.title = element_text(size = 22, face="bold"),  
+    legend.text = element_text(size = 20),  
+    panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)  
+  )
+
+# Create a new grouping variable to combine Superior and Strait samples
+diversity_results$Region <- ifelse(diversity_results$Metagenome %in% c("Superior_1A", "Superior_4B"), 
+                                   "Superior", "Strait")
+
+# Compute Bray-Curtis distance again using the grouped regions
+bray_dist <- vegdist(as.matrix(diversity_results[, c("Shannon_Index", "Observed_Richness")]), method = "bray")
+
+
+# Run PERMANOVA with the new grouped variable
+permanova_result <- adonis2(bray_dist ~ Region, data = diversity_results)
+
+# Print the results
+print(permanova_result)
+#width=918&height=559&scale=1

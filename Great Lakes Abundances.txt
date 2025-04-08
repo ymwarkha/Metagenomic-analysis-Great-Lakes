@@ -1,0 +1,46 @@
+# Install if not already installed
+install.packages("tidyverse")
+
+# Load libraries
+library(tidyverse)
+# Load your taxonomy data
+taxonomy_data <- read.csv("Great Lakes Genus Taxonomy.csv")  # Replace with your file path
+head(taxonomy_data)
+# Calculate relative abundance and summarize by Sample and Genus
+genus_abundance <- taxonomy_data %>%
+  group_by(Sample, Genus) %>%
+  summarise(TotalFraction = sum(fraction_total_reads)) %>%  # Summing fractions
+  mutate(RelAb = TotalFraction / sum(TotalFraction)) %>%    # Calculate relative abundance
+  ungroup()
+
+# Group low-abundance genera
+genus_abundance <- genus_abundance %>%
+  mutate(Genus = ifelse(RelAb < 0.02, "< 2%", Genus)) %>%
+  group_by(Sample, Genus) %>%
+  summarise(TotalFraction = sum(TotalFraction), RelAb = sum(RelAb)) %>%
+  ungroup()
+# Generate colors for the genera
+unique_genera <- unique(genus_abundance$Genus)
+color_palette <- colorRampPalette(c("purple4", "lightpink", "firebrick", "orange", "lemonchiffon", "olivedrab4", "darkcyan", "lightblue", "darkblue"))
+genus_colors <- setNames(color_palette(length(unique_genera)), unique_genera)
+# Create the taxa plot
+ggplot(genus_abundance, aes(x = Sample, y = RelAb, fill = Genus)) +
+  geom_bar(stat = "identity", color = "black", position = "stack") +
+  ylab("Proportion of Community") +
+  xlab("Great Lakes Sediment Sample") +
+  scale_fill_manual(values = genus_colors) +
+  theme_linedraw() +
+  theme(
+    axis.text.y = element_text(size = 12, color = "black"),
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1, color = "black"),
+    axis.title.y = element_text(size = 14, color = "black"),
+    legend.text = element_text(size = 10),
+    legend.position = "bottom",
+    legend.spacing.x = unit(0.5, 'mm'),
+    legend.spacing.y = unit(0.5, 'mm'),
+    strip.text = element_text(size = 12, face = "bold"),
+    legend.title = element_text(face = "bold", size = 12)
+  ) +
+  guides(fill = guide_legend(ncol = 2, byrow = TRUE))
+
+#704&height=574&scale=1

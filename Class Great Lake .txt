@@ -1,0 +1,38 @@
+setwd("~/data/FINAL GRAPHS/GREAT LAKE/")
+
+genes <- read.csv(file = "/home/ymwarkha/data/FINAL GRAPHS/GREAT LAKE/Class_Taxonomy_GreatLake NEW.csv", sep = ',')
+head(genes)
+all <- genes %>%
+  select(Sample,Class,fraction_total_reads ) %>%
+  filter(fraction_total_reads != 0)%>%
+  mutate(Class=ifelse(fraction_total_reads<0.02, "< 2 % " , Class))%>%
+  group_by(Sample, Class) %>%  #now group and summarize again to group newly labeled low abundance taxa together
+  summarise(
+    Abundance = sum(fraction_total_reads))
+
+
+head(all)
+
+Class_colors <- c(
+  "grey22", "darkcyan", "orchid1", "green", "orange", "blue", "tomato2", "olivedrab", "grey47",
+  "cyan", "coral3", "darkgreen", "magenta", "palegoldenrod", "dodgerblue", "firebrick", "yellow", "purple4",
+  "lightblue", "grey77", "mediumpurple1", "tan4", "red", "darkblue", "yellowgreen")
+
+
+ggplot(all)+
+  geom_col( mapping = aes(x = Sample, y = Abundance, fill = Class), color = "black", position = "Stack", show.legend = TRUE)+
+  ylab("Gene counts") +
+  xlab(NULL)+
+  scale_fill_manual(values = Class_colors) +
+  theme_linedraw()+
+  theme(axis.text.y = element_text(size = 15, color = "black"),
+        axis.title.y = element_text(size = 15, color = "black"),
+        axis.text.x = element_text(size = 15, angle = 0, vjust = 1, hjust = 0.5, color = "black"),
+        legend.text = element_text(size = 15),
+        legend.position = "bottom",
+        legend.spacing.x = unit(0.1, 'mm'),
+        legend.spacing.y = unit(0.05, 'mm'),
+        plot.margin=grid::unit(c(0.1,0.1,0.1,0.1), "mm"),
+        strip.text = element_text(size = 15, face = "bold", angle = 0),
+        legend.title = element_text(face="bold", size = 15))+
+  guides(fill=guide_legend(ncol=3,byrow=TRUE))
